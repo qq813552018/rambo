@@ -1,0 +1,69 @@
+<?xml version='1.0' encoding='utf-8'?>
+<Server port="8115" shutdown="SHUTDOWN">
+  <!--
+  <Listener className="org.apache.catalina.startup.VersionLoggerListener" />
+  <Listener className="org.apache.catalina.security.SecurityListener" />
+  -->
+  <Listener className="org.apache.catalina.core.AprLifecycleListener" SSLEngine="on" />
+  <Listener className="org.apache.catalina.core.JasperListener" />
+  <Listener className="org.apache.catalina.core.JreMemoryLeakPreventionListener" />
+  <Listener className="org.apache.catalina.mbeans.GlobalResourcesLifecycleListener" />
+  <Listener className="org.apache.catalina.core.ThreadLocalLeakPreventionListener" />
+
+
+  <GlobalNamingResources>
+    <Resource name="UserDatabase" auth="Container"
+              type="org.apache.catalina.UserDatabase"
+              description="User database that can be updated and saved"
+              factory="org.apache.catalina.users.MemoryUserDatabaseFactory"
+              pathname="conf/tomcat-users.xml" />
+  </GlobalNamingResources>
+  <Service name="Catalina">
+
+        <Executor name="tomcatThreadPool" namePrefix="catalina-exec-"
+                maxThreads="1000" minSpareThreads="20" maxIdleTime="30000"/>
+
+   <Connector port="9443" protocol="HTTP/1.1" SSLEnabled="true"
+              maxThreads="5000" minSpareThreads="20" maxIdleTime="30000"
+              clientAuth="false" sslProtocol="TLS"
+              keystoreFile="conf/tomcat.keystore"
+              keystorePass="123456" URIEncoding="UTF-8"
+              ciphers="TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256,TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA,TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA384,TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA,TLS_RSA_WITH_AES_128_CBC_SHA256,TLS_RSA_WITH_AES_128_CBC_SHA,TLS_RSA_WITH_AES_256_CBC_SHA256,TLS_RSA_WITH_AES_256_CBC_SHA"
+              />
+
+
+    <Connector port="8119" protocol="AJP/1.3" redirectPort="8453" URIEncoding="UTF-8"/>
+    <Engine name="Catalina" defaultHost="localhost">
+      <Realm className="org.apache.catalina.realm.UserDatabaseRealm"
+             resourceName="UserDatabase"/>
+
+
+
+<Host name="localhost" debug="0" appBase="webapps" unpackWARs="true" autoDeploy="true"></Host>
+<Host name="a03office.bawinx.com" debug="9" appBase="webapps"
+                              unpackWARs="false" autoDeploy="false"
+                               xmlValidation="false" xmlNamespaceAware="false">
+
+                                <Alias>a03office.bawinx.com</Alias>
+                                <Alias>a03office-g.bawinx.com</Alias>
+                                <Alias>a03office-e.bawinx.com</Alias>
+                                <Alias>a03office-w.bawinx.com</Alias>
+
+           <Logger className="org.apache.catalina.logger.FileLogger"
+                 directory="logs"  prefix="A03_office_log." suffix=".txt"
+            timestamp="true"/>
+        <Context path="" docBase="/web/A03/office/WebRoot" debug="9" reloadable="false">
+        <Valve className="org.apache.catalina.valves.AccessLogValve"
+      directory="logs/access/A03"
+      prefix="A03_office_access_log."
+      suffix=".txt"
+      pattern="%a %v %U %t %m %s  %{User-Agent}i" resolveHosts="false"/>
+      </Context>
+</Host>
+
+
+    </Engine>
+
+  </Service>
+
+</Server>

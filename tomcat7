@@ -1,0 +1,270 @@
+#!/bin/bash
+
+
+# tomcat     This shell script control starting and stopping Tomcat
+# chkconfig: - 80 20
+# by shaw 20161212
+
+
+## Source function library.
+if [ -f /etc/rc.d/init.d/functions ];then
+     . /etc/rc.d/init.d/functions
+else
+     echo "/etc/rc.d/init.d/functions file does not exist."
+     echo "Please use yum -y install initscripts"
+     exit 0
+fi
+
+
+## PATH
+PATH=/bin:/usr/bin:/usr/local/bin:/sbin:/usr/sbin:/usr/local/sbin:$PATH
+export PATH
+
+
+## Color Variable
+GREEN_COLOR='\E[1;32m'
+RED_COLOR='\E[1;31m'
+RES='\E[0m'
+
+
+## SELinux need use runuser not su
+if [ -x "/sbin/runuser" ];then
+    SU="/sbin/runuser -s /bin/sh"
+else
+    SU="/bin/su -s /bin/sh"
+fi
+
+
+### Tomcat Variable
+## tomcat home dir
+Tomcat_Home="${Tomcat_Home:-/opt/tomcat7}"
+
+## tomcat conf file
+TOMCAT_CONF=${Tomcat_Home}/conf/server.xml
+
+## tomcat control script
+TOMCAT_SCRIPT="${TOMCAT_SCRIPT:-${Tomcat_Home}/bin/catalina.sh}"
+
+## judgment tomcat home directory and config file and control scripts
+if [ ! -d ${Tomcat_Home} ];then
+       action "${Tomcat_Home} is not exists!!!" /bin/true
+       exit 0
+elif [ ! -f ${TOMCAT_CONF} ];then
+       action "${TOMCAT_CONF} is not exists!!!" /bin/true
+       exit 0
+elif [ ! -f ${TOMCAT_SCRIPT} ];then
+       action "${TOMCAT_SCRIPT} is not exists!!!" /bin/true
+       exit 0
+fi
+
+## tomcat name
+SERVICE="$($(which basename) ${Tomcat_Home})"
+
+## tomcat program name
+PROCESS="${SERVICE}"
+
+## the tomcat username
+TOMCAT_USER="${TOMCAT_USER:-tomcat}"
+
+## the tomcat pid file
+#CATALINA_PID="${Tomcat_Home}/${SERVICE}.pid"
+
+## tomcat cache file/dir
+Tomcat_Cache="${Tomcat_Home}/work/* ${Tomcat_Home}/temp/* ${Tomcat_Home}/conf/Catalina"
+
+## tomcat lock file
+#Tomcat_Lock="${Tomcat_Home}/${SERVICE}.lock"
+
+## flag
+RETVAL="0"
+
+
+## Grant tomcat
+grant()
+{
+    $(which chown) -R $TOMCAT_USER.$TOMCAT_USER $Tomcat_Home &> /dev/null
+}
+
+
+## Check Tomcat process
+PP()
+{
+    #PROCS="$($(which pgrep) -d , -u ${TOMCAT_USER} -G ${TOMCAT_USER} -f "${PROCESS}[ $]")"
+    #pid=$(echo $pid | awk '{print $1}')
+    pid2=$(ps -u $TOMCAT_USER -f | grep "java" | grep "$Tomcat_Home" | grep -v "grep" | awk '{print $2,$3}')
+    pid=${pid2%% *}
+}
+
+
+## Start Tomcat
+start()
+{
+    echo $"[Starting $SERVICE: ]"
+    PP
+    cd /proc && {
+        if [[ -d "$pid" ]];then
+            action "$SERVICE already running." /bin/true
+        else
+            rm -rfv $Tomcat_Cache
+            grant
+            $SU - $TOMCAT_USER -c "${TOMCAT_SCRIPT} start"
+            #daemon --check $SERVICE --user $TOMCAT_USER $TOMCAT_SCRIPT start
+            RETVAL=$?
+            [ $RETVAL -eq 0 ] && touch /var/lock/subsys/$SERVICE
+            echo
+            return $RETVAL
+        fi
+    }
+
+    #grant
+}
+
+
+## tomcat pid and port and process
+PPP()
+{
+        ## tomcat pid
+        echo;echo "[${SERVICE} pid:]"
+        PP
+        [ -n "$pid" ] && {
+          printf "%-10s %-10s %-10s %-10s %-10s\n" \(pid user cpu mem command\)
+          printf "%-10s %-10s %-10s %-10s %-10s\n" $($(which top) -b -n 1 | awk '{ if($1=='${pid}') print "",$1,$2,$9,$10,"",$12}')
+        }
+
+        ## tomcat port
+        echo;echo "[${SERVICE} port:]"
+        $SU - $TOMCAT_USER -c "netstat -lnpute 2>/dev/null | egrep 'java' | egrep 'LISTEN'"
+
+        ## tomcat process
+        echo;echo "[${SERVICE} process:]"
+        ps -u $TOMCAT_USER -f | egrep "${Tomcat_Home}" | egrep -v 'egrep'
+
+}
+
+
+## Stop Tomcat
+stop()
+{
+    echo $"[Stoping $SERVICE: ]"
+    PP
+    cd /proc && {
+        if [ -d "$pid" ];then
+            grant 
+            $SU - $TOMCAT_USER -c "${TOMCAT_SCRIPT} stop"
+            #daemon --check $SERVICE --user $TOMCAT_USER $TOMCAT_SCRIPT stop
+            RETVAL=$?
+            [ $RETVAL -eq 0 ] && rm -f /var/lock/subsys/$SERVICE
+            sleep 1
+
+            PP
+            if [ -d "$pid" ]; then
+                 kill $pid2 &> /dev/null
+                 sleep 1
+
+                 PP
+                 if [ -d "$pid" ]; then
+                      kill -9 $pid2 &> /dev/null
+                 fi
+            fi
+        else
+            action "$SERVICE already stoping" /bin/true
+        fi
+    }
+
+    #grant
+}
+
+
+## Tomcat Runtime
+runtime()
+{
+    echo;echo "[${SERVICE} started time:]"
+    Tomcat_Start_Time=$($(which ps) -u $TOMCAT_USER -f | egrep 'java' | egrep "${Tomcat_Home}" | awk '{print $5}')
+    Tomcat_first_stamp=$($(which date) -d "$Tomcat_Start_Time" +%s)
+    Tomcat_now_stamp=$($(which date) +%s)
+    let day_stamp=($Tomcat_now_stamp - $Tomcat_first_stamp)
+    let day=(${day_stamp} / 86400)
+    echo "At ${Tomcat_Start_Time} ${day} days ago"
+}
+
+
+## Tomcat Status
+status()
+{
+    PP
+    cd /proc && {
+        if [ -d "$pid" ];then
+             action "${SERVICE} (pid ${pid}) is running..." /bin/true
+             runtime
+             PPP
+        else
+             action "${SERVICE} is stopped." /bin/true
+             PPP
+        fi
+    }
+}
+
+
+## Tomcat Syntax Check
+syntax()
+{
+    ${TOMCAT_SCRIPT} configtest -config $TOMCAT_CONF
+}
+
+
+## Tomcat Real Time Log
+log()
+{
+    tailf ${Tomcat_Home}/logs/catalina.$(date +%Y%m%d).out
+}
+
+
+## Tomcat Version
+version()
+{
+    ${TOMCAT_SCRIPT} version
+}
+
+
+## Tomcat Control Script Usage
+usage()
+{
+    echo "Usage: $0 {start|stop|restart|status|version|syntax|log}"
+}
+
+
+## select function
+RETVAL="0"
+case "$1" in
+    start)
+        start
+        status
+        ;;
+    stop)
+        stop
+        status
+        ;;
+    restart)
+        stop
+        echo;echo;echo "[--------------------I am applying for a split line--------------------]";echo
+        start
+        status
+        ;;
+    status)
+        status
+        ;;
+    version)
+        version
+        ;;
+    syntax)
+        syntax
+        ;;
+    log)
+        log
+        ;;
+    *)
+      usage
+      ;;
+esac
+
+exit 0 
